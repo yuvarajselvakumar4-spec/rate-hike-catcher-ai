@@ -2,10 +2,39 @@ import streamlit as st
 import pandas as pd
 
 st.set_page_config(
-    page_title="Purchase Rate-Hike Catcher AI",
-    page_icon="🔍",
+    page_title="RateGuard AI — Procurement & Rate-Hike Audit",
+    page_icon="🛡️",
     layout="wide"
 )
+
+# --- 0. Login Gate (Secrets-backed with Demo Fallback) ---
+auth_cfg = st.secrets.get("auth", {}) if hasattr(st, "secrets") else {}
+expected_user = str(auth_cfg.get("username", "demo"))
+expected_pass = str(auth_cfg.get("password", "1234"))
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.title("🛡️ RateGuard AI — Login / உள்நுழைவு")
+    st.caption("Secure access for SME invoice & rate-hike audit / பர்ச்சேஸ் பில் ஆடிட் பாதுகாப்பான அணுகல்")
+
+    with st.form("login_form"):
+        u_in = st.text_input("Username / பயனர் பெயர்")
+        p_in = st.text_input("Password / கடவுச்சொல்", type="password")
+        submitted = st.form_submit_button("Login / உள்நுழை")
+
+    if submitted:
+        if u_in == expected_user and p_in == expected_pass:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Invalid username or password / தவறான பயனர் பெயர் அல்லது கடவுச்சொல்.")
+    st.stop()
+
+if st.sidebar.button("Logout / வெளியேறு"):
+    st.session_state.authenticated = False
+    st.rerun()
 
 # --- 1. Top Controls: Language & Currency ---
 top_c1, top_c2, top_c3 = st.columns([2, 1, 1])
@@ -27,15 +56,15 @@ def t(en, ta):
     return f"{en} / {ta}"
 
 # --- 2. Header & Privacy Note ---
-st.title("🔍 Purchase Rate-Hike & Bill Audit AI")
+st.title("🛡️ RateGuard AI — Rate-Hike & Bill Audit")
 st.write(t(
-    "Audit supplier invoices against approved rates in seconds — spot unauthorized price hikes, calculate extra spend, export reports & draft supplier emails.",
-    "அப்ரூவ்ட் ரேட் பட்டியலோடு புது சப்ளையர் பில்லை நொடிகளில் ஒப்பிடுங்க — தேவையற்ற ரேட் உயர்வு, கூடுதல் செலவு, ரிப்போர்ட் & சப்ளையர் மெயில் டிராஃப்ட் அனைத்தும் ஒரே இடத்தில்!"
+    "AI-assisted procurement audit to catch unauthorized supplier rate hikes, leakage, price drops & billing anomalies fast.",
+    "சப்ளையர் பில்களில் அங்கீகரிக்கப்படாத ரேட் உயர்வு, கூடுதல் செலவு, ரேட் குறைவு மற்றும் வித்தியாசங்களை நொடிகளில் கண்டறியும் AI ஆடிட் டூல்."
 ))
 
 st.info(t(
-    "🔒 Privacy Note: Uploaded CSV files are processed in memory for your session and are not permanently stored in a database. Do not upload sensitive passwords or keys.",
-    "🔒 பாதுகாப்பு குறிப்பு: அப்லோட் செய்யப்படும் CSV கோப்புகள் இந்த செஷனில் மட்டுமே கணக்கிடப்படும்; டேட்டாபேஸில் நிரந்தரமாகச் சேமிக்கப்படாது. பாஸ்வேர்ட் அல்லது ரகசிய கீ-களை அப்லோட் செய்ய வேண்டாம்."
+    "🔒 Security & Privacy: Session-protected access; uploaded CSVs are analyzed in memory during your session without permanent database storage.",
+    "🔒 பாதுகாப்பு: லாகின் மூலம் பாதுகாக்கப்பட்ட அணுகல்; அப்லோட் செய்யப்படும் CSV கோப்புகள் டேட்டாபேஸில் நிரந்தரமாகச் சேமிக்கப்படாது."
 ))
 
 # --- 3. Sample CSV Templates Download ---
@@ -51,7 +80,7 @@ sample_inv = pd.DataFrame({
     "new_unit_price": [13.50, 1450.00, 235.00, 575.00, 110.00, 300.00]
 })
 
-with st.expander(t("📄 Need Sample CSV Templates? Download here", "📄 சாம்பிள் CSV டெம்ப்ளேட் வேண்டுமா? இங்கே டவுன்லோட் செய்யவும்")):
+with st.expander(t("📄 Sample CSV Templates", "📄 சாம்பிள் CSV டெம்ப்ளேட்கள்")):
     d1, d2 = st.columns(2)
     with d1:
         st.download_button(
@@ -81,34 +110,26 @@ def find_col(columns, candidates):
                 return c
     return columns[0] if len(columns) > 0 else None
 
-# --- 5. Data Source: Demo or Company CSV Upload ---
+# --- 5. Data Source ---
 use_sample = st.checkbox(
-    t("Use built-in demo data right now", "இப்போதே உள்ளமைக்கப்பட்ட டெமோ டேட்டாவைப் பயன்படுத்தவும்"),
+    t("Use built-in demo data", "டெமோ டேட்டாவைப் பயன்படுத்தவும்"),
     value=True
 )
 
 if use_sample:
     old_df = sample_old.copy()
     inv_df = sample_inv.copy()
-    old_code_col, old_name_col, old_price_col = "item_code", "item_name", "old_unit_price"
-    inv_code_col, inv_qty_col, inv_price_col = "item_code", "qty_billed", "new_unit_price"
 else:
     u1, u2 = st.columns(2)
     with u1:
-        old_file = st.file_uploader(
-            t("1. Old Approved Rates CSV", "1. பழைய Approved Rates CSV"),
-            type=["csv"]
-        )
+        old_file = st.file_uploader(t("1. Old Approved Rates CSV", "1. பழைய Approved Rates CSV"), type=["csv"])
     with u2:
-        inv_file = st.file_uploader(
-            t("2. New Supplier Invoice CSV", "2. புது Supplier Invoice CSV"),
-            type=["csv"]
-        )
+        inv_file = st.file_uploader(t("2. New Supplier Invoice CSV", "2. புது Supplier Invoice CSV"), type=["csv"])
 
     if not (old_file and inv_file):
         st.warning(t(
-            "Please upload both CSV files above, or check 'Use built-in demo data right now' to test.",
-            "இரண்டு CSV கோப்புகளையும் மேலே அப்லோட் செய்யவும், அல்லது டெமோ டேட்டாவைத் தேர்வு செய்யவும்."
+            "Upload both CSV files or check 'Use built-in demo data'.",
+            "இரண்டு CSV கோப்புகளையும் அப்லோட் செய்யவும் அல்லது டெமோ டேட்டாவைத் தேர்வு செய்யவும்."
         ))
         st.stop()
 
@@ -116,49 +137,25 @@ else:
         old_raw = pd.read_csv(old_file)
         inv_raw = pd.read_csv(inv_file)
     except Exception as e:
-        st.error(t(f"Could not read CSV files: {e}", f"CSV கோப்புகளைப் படிக்க முடியவில்லை: {e}"))
+        st.error(t(f"Error reading CSV: {e}", f"CSV கோப்பைப் படிப்பதில் சிக்கல்: {e}"))
         st.stop()
 
-    with st.expander(t("🧩 Column Mapping (Auto-detected — adjust if needed)", "🧩 காலம் மேப்பிங் (தானாகக் கண்டறியப்பட்டது — தேவைப்பட்டால் மாற்றவும்)"), expanded=False):
+    with st.expander(t("🧩 Column Mapping", "🧩 காலம் மேப்பிங்"), expanded=False):
         m1, m2, m3 = st.columns(3)
         with m1:
-            old_code_col = st.selectbox(
-                t("Old Rate: Item Code Column", "பழைய ரேட்: Item Code காலம்"),
-                old_raw.columns,
-                index=list(old_raw.columns).index(find_col(old_raw.columns, ["item_code", "code", "sku", "item_id", "id"]))
-            )
+            old_code_col = st.selectbox(t("Old: Item Code", "பழையது: Item Code"), old_raw.columns, index=list(old_raw.columns).index(find_col(old_raw.columns, ["item_code", "code", "sku", "item_id", "id"])))
         with m2:
-            old_name_col = st.selectbox(
-                t("Old Rate: Item Name Column", "பழைய ரேட்: Item Name காலம்"),
-                old_raw.columns,
-                index=list(old_raw.columns).index(find_col(old_raw.columns, ["item_name", "name", "description", "item", "material"]))
-            )
+            old_name_col = st.selectbox(t("Old: Item Name", "பழையது: Item Name"), old_raw.columns, index=list(old_raw.columns).index(find_col(old_raw.columns, ["item_name", "name", "description", "item", "material"])))
         with m3:
-            old_price_col = st.selectbox(
-                t("Old Rate: Approved Price Column", "பழைய ரேட்: Approved Price காலம்"),
-                old_raw.columns,
-                index=list(old_raw.columns).index(find_col(old_raw.columns, ["old_unit_price", "old_price", "approved_price", "rate", "price"]))
-            )
+            old_price_col = st.selectbox(t("Old: Approved Price", "பழையது: Approved Price"), old_raw.columns, index=list(old_raw.columns).index(find_col(old_raw.columns, ["old_unit_price", "old_price", "approved_price", "rate", "price"])))
 
         n1, n2, n3 = st.columns(3)
         with n1:
-            inv_code_col = st.selectbox(
-                t("Invoice: Item Code Column", "பில்: Item Code காலம்"),
-                inv_raw.columns,
-                index=list(inv_raw.columns).index(find_col(inv_raw.columns, ["item_code", "code", "sku", "item_id", "id"]))
-            )
+            inv_code_col = st.selectbox(t("Invoice: Item Code", "பில்: Item Code"), inv_raw.columns, index=list(inv_raw.columns).index(find_col(inv_raw.columns, ["item_code", "code", "sku", "item_id", "id"])))
         with n2:
-            inv_qty_col = st.selectbox(
-                t("Invoice: Quantity Column", "பில்: Quantity காலம்"),
-                inv_raw.columns,
-                index=list(inv_raw.columns).index(find_col(inv_raw.columns, ["qty_billed", "qty", "quantity", "billed_qty"]))
-            )
+            inv_qty_col = st.selectbox(t("Invoice: Quantity", "பில்: Quantity"), inv_raw.columns, index=list(inv_raw.columns).index(find_col(inv_raw.columns, ["qty_billed", "qty", "quantity", "billed_qty"])))
         with n3:
-            inv_price_col = st.selectbox(
-                t("Invoice: New Unit Price Column", "பில்: New Unit Price காலம்"),
-                inv_raw.columns,
-                index=list(inv_raw.columns).index(find_col(inv_raw.columns, ["new_unit_price", "new_price", "billed_price", "rate", "price"]))
-            )
+            inv_price_col = st.selectbox(t("Invoice: New Price", "பில்: New Price"), inv_raw.columns, index=list(inv_raw.columns).index(find_col(inv_raw.columns, ["new_unit_price", "new_price", "billed_price", "rate", "price"])))
 
     old_df = pd.DataFrame({
         "item_code": old_raw[old_code_col],
@@ -173,7 +170,7 @@ else:
 
 # --- 6. Threshold & Audit Calculation ---
 threshold = st.slider(
-    t("Alert Threshold (% hike above approved rate)", "அலர்ட் வரம்பு (அப்ரூவ்ட் ரேட்டை விட எத்தனை % கூடினால் காட்டணும்?)"),
+    t("Alert Threshold (% hike above approved rate)", "அலர்ட் வரம்பு (% ரேட் உயர்வு)"),
     0.0, 30.0, 0.0, 0.5
 )
 
@@ -190,20 +187,59 @@ matched = merged.dropna(subset=["old_unit_price"]).copy()
 if not matched.empty:
     matched["price_diff"] = (matched["new_unit_price"] - matched["old_unit_price"]).round(2)
     matched["hike_pct"] = (((matched["new_unit_price"] - matched["old_unit_price"]) / matched["old_unit_price"]) * 100).round(2)
-    matched["extra_cost_loss"] = (matched["price_diff"] * matched["qty_billed"]).round(2)
-    hikes = matched[matched["hike_pct"] > threshold].sort_values(by="extra_cost_loss", ascending=False)
+    matched["net_impact"] = (matched["price_diff"] * matched["qty_billed"]).round(2)
+
+    hikes = matched[matched["hike_pct"] > threshold].copy()
+    hikes["extra_cost_loss"] = hikes["net_impact"]
+    hikes = hikes.sort_values(by="extra_cost_loss", ascending=False)
+
+    drops = matched[matched["price_diff"] < 0].copy()
+    drops["savings_amt"] = (drops["price_diff"].abs() * drops["qty_billed"]).round(2)
+    drops = drops.sort_values(by="savings_amt", ascending=False)
 else:
-    hikes = pd.DataFrame(columns=["item_code", "item_name", "old_unit_price", "new_unit_price", "hike_pct", "extra_cost_loss"])
+    hikes = pd.DataFrame(columns=["item_code", "item_name", "old_unit_price", "new_unit_price", "qty_billed", "hike_pct", "extra_cost_loss"])
+    drops = pd.DataFrame(columns=["item_code", "item_name", "old_unit_price", "new_unit_price", "qty_billed", "savings_amt"])
 
 total_loss = hikes["extra_cost_loss"].sum() if not hikes.empty else 0.0
+total_savings = drops["savings_amt"].sum() if not drops.empty else 0.0
+max_hike_pct = hikes["hike_pct"].max() if not hikes.empty else 0.0
 
-# --- 7. KPIs & Results ---
+# Audit Risk Score
+if total_loss >= 2000 or max_hike_pct >= 15.0 or len(unmatched) >= 2:
+    risk_label = t("HIGH RISK", "அதிக அபாயம் (HIGH)")
+elif total_loss > 0 or len(unmatched) > 0:
+    risk_label = t("MEDIUM RISK", "நடுத்தர அபாயம் (MEDIUM)")
+else:
+    risk_label = t("LOW RISK", "குறைந்த அபாயம் (LOW)")
+
+# --- 7. KPIs & Smart AI Audit Summary ---
 st.divider()
-k1, k2, k3 = st.columns(3)
+k1, k2, k3, k4 = st.columns(4)
 k1.metric(t("Rate-Hiked Items", "ரேட் ஏறிய ஐட்டங்கள்"), f"{len(hikes)}")
 k2.metric(t("Total Extra Cost Leakage", "மொத்த கூடுதல் செலவு"), f"{curr_sym}{total_loss:,.2f}")
-k3.metric(t("Unmatched / New Items", "புது / மேட்ச் ஆகாத ஐட்டங்கள்"), f"{len(unmatched)}")
+k3.metric(t("Price Drop Savings", "ரேட் குறைவால் சேமிப்பு"), f"{curr_sym}{total_savings:,.2f}")
+k4.metric(t("Audit Risk Level", "ஆடிட் ரிஸ்க் நிலை"), risk_label)
 
+# Smart AI Anomaly Summary
+if not hikes.empty:
+    top_loss_row = hikes.iloc[0]
+    spike_row = hikes.sort_values(by="hike_pct", ascending=False).iloc[0]
+    st.warning(t(
+        f"🤖 AI Anomaly Summary: Highest financial leakage is '{top_loss_row['item_name']}' ({curr_sym}{top_loss_row['extra_cost_loss']:,.2f}), while steepest percentage spike is '{spike_row['item_name']}' (+{spike_row['hike_pct']}%). Also found {len(unmatched)} unmatched item(s).",
+        f"🤖 AI அனாமலி சுருக்கம்: அதிக செலவு உயர்வு '{top_loss_row['item_name']}' ({curr_sym}{top_loss_row['extra_cost_loss']:,.2f}), அதிக சதவீத உயர்வு '{spike_row['item_name']}' (+{spike_row['hike_pct']}%). மேலும் {len(unmatched)} புதிய/மேட்ச் ஆகாத ஐட்டம் உள்ளது."
+    ))
+elif not unmatched.empty:
+    st.info(t(
+        f"🤖 AI Anomaly Summary: No rate hikes above threshold, but {len(unmatched)} unmatched item(s) need rate approval check.",
+        f"🤖 AI அனாமலி சுருக்கம்: வரம்புக்கு மேல் ரேட் உயர்வு இல்லை; ஆனால் {len(unmatched)} புதிய ஐட்டங்களுக்கு ரேட் உறுதி செய்ய வேண்டும்."
+    ))
+else:
+    st.success(t(
+        "🤖 AI Anomaly Summary: Invoice aligns cleanly with approved rates above your selected threshold.",
+        "🤖 AI அனாமலி சுருக்கம்: நிர்ணயிக்கப்பட்ட வரம்பிற்குள் பில் சரியாக உள்ளது."
+    ))
+
+# --- 8. Detected Hikes, Report & Supplier Email ---
 st.subheader(t("🚨 Detected Rate-Hike Items", "🚨 ரேட் உயர்வு கண்டறியப்பட்ட ஐட்டங்கள்"))
 if not hikes.empty:
     display_cols = ["item_code", "item_name", "old_unit_price", "new_unit_price", "qty_billed", "hike_pct", "extra_cost_loss"]
@@ -213,7 +249,7 @@ if not hikes.empty:
     st.download_button(
         t("📥 Download Audit Report CSV", "📥 ஆடிட் ரிப்போர்ட் CSV டவுன்லோட்"),
         data=csv_data,
-        file_name="rate_hike_audit_report.csv",
+        file_name="rateguard_audit_report.csv",
         mime="text/csv"
     )
 
@@ -240,6 +276,11 @@ else:
         "No unauthorized rate hikes found above your threshold.",
         "நீங்கள் நிர்ணயித்த வரம்பிற்கு மேல் எந்த ரேட் உயர்வும் இல்லை."
     ))
+
+# --- 9. Price Drops & Unmatched Items ---
+if not drops.empty:
+    st.subheader(t("💚 Price Drops / Potential Savings", "💚 ரேட் குறைவு / சாத்தியமான சேமிப்பு"))
+    st.dataframe(drops[["item_code", "item_name", "old_unit_price", "new_unit_price", "qty_billed", "savings_amt"]], use_container_width=True)
 
 if not unmatched.empty:
     st.warning(t(
